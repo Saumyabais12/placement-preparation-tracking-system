@@ -1,0 +1,13 @@
+### Get all preparation tasks
+GET http://localhost:8080/api/tasks
+
+### Add a preparation task
+POST http://localhost:8080/api/tasks
+Content-Type: application/json
+
+{
+  "title": "Learn Java Collections",
+  "category": "Java",
+  "completed": false
+}
+
