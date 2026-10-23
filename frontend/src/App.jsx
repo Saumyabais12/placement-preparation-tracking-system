@@ -2,215 +2,328 @@
 import { useEffect, useState } from "react";
 import "./App.css";
 
-const API_URL = "http://localhost:8080/api/tasks";
+const API_URL = "http://localhost:8080/api/applications";
+
+const emptyForm = {
+  companyName: "",
+  jobRole: "",
+  applicationDate: new Date().toISOString().slice(0, 10),
+  status: "APPLIED",
+  jobLink: "",
+  notes: "",
+};
+
+const statuses = [
+  "APPLIED",
+  "ASSESSMENT",
+  "INTERVIEW",
+  "OFFER",
+  "REJECTED",
+];
 
 function App() {
-  const [tasks, setTasks] = useState([]);
-  const [title, setTitle] = useState("");
-  const [category, setCategory] = useState("Java");
+  const [applications, setApplications] = useState([]);
+  const [form, setForm] = useState(emptyForm);
+  const [editingId, setEditingId] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
 
-  async function loadTasks() {
+  async function loadApplications() {
     try {
-      setError("");
       const response = await fetch(API_URL);
-
-      if (!response.ok) {
-        throw new Error("Could not load tasks.");
-      }
-
-      const data = await response.json();
-      setTasks(data);
-    } catch (err) {
-      setError("Cannot connect to the backend. Please check Spring Boot.");
+      if (!response.ok) throw new Error("Could not load applications");
+      setApplications(await response.json());
+    } catch (error) {
+      setMessage(
+        "Cannot connect to the backend. Make sure Spring Boot is running."
+      );
     } finally {
       setLoading(false);
     }
   }
 
   useEffect(() => {
-    loadTasks();
+    loadApplications();
   }, []);
 
-  async function addTask(event) {
+  function handleChange(event) {
+    setForm({ ...form, [event.target.name]: event.target.value });
+  }
+
+  async function handleSubmit(event) {
     event.preventDefault();
-
-    if (!title.trim()) {
-      setError("Please enter a task title.");
-      return;
-    }
+    setMessage("");
 
     try {
-      setError("");
-
-      const response = await fetch(API_URL, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          title: title.trim(),
-          category,
-          completed: false,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error("Could not add task.");
-      }
-
-      const newTask = await response.json();
-      setTasks((previousTasks) => [...previousTasks, newTask]);
-      setTitle("");
-      setCategory("Java");
-    } catch (err) {
-      setError("Task could not be added. Please try again.");
-    }
-  }
-
-  async function toggleTask(task) {
-    try {
-      setError("");
-
-      const response = await fetch(`${API_URL}/${task.id}`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          title: task.title,
-          category: task.category,
-          completed: !task.completed,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error("Could not update task.");
-      }
-
-      const updatedTask = await response.json();
-
-      setTasks((previousTasks) =>
-        previousTasks.map((item) =>
-          item.id === updatedTask.id ? updatedTask : item
-        )
+      const response = await fetch(
+        editingId ? `${API_URL}/${editingId}` : API_URL,
+        {
+          method: editingId ? "PUT" : "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(form),
+        }
       );
-    } catch (err) {
-      setError("Task status could not be updated.");
+
+      if (!response.ok) {
+        throw new Error("Could not save the application");
+      }
+
+      setForm(emptyForm);
+      setEditingId(null);
+      setMessage(editingId ? "Application updated!" : "Application added!");
+      await loadApplications();
+    } catch (error) {
+      setMessage(error.message);
     }
   }
 
-  async function deleteTask(id) {
-    try {
-      setError("");
+  function startEdit(application) {
+    setEditingId(application.id);
+    setForm({
+      companyName: application.companyName ?? "",
+      jobRole: application.jobRole ?? "",
+      applicationDate: application.applicationDate ?? "",
+      status: application.status ?? "APPLIED",
+      jobLink: application.jobLink ?? "",
+      notes: application.notes ?? "",
+    });
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
 
+  async function deleteApplication(id) {
+    if (!window.confirm("Delete this application?")) return;
+
+    try {
       const response = await fetch(`${API_URL}/${id}`, {
         method: "DELETE",
       });
-
-      if (!response.ok) {
-        throw new Error("Could not delete task.");
-      }
-
-      setTasks((previousTasks) =>
-        previousTasks.filter((task) => task.id !== id)
-      );
-    } catch (err) {
-      setError("Task could not be deleted.");
+      if (!response.ok) throw new Error("Could not delete the application");
+      setMessage("Application deleted.");
+      await loadApplications();
+    } catch (error) {
+      setMessage(error.message);
     }
   }
 
-  const completedCount = tasks.filter((task) => task.completed).length;
-  const pendingCount = tasks.length - completedCount;
+  const counts = {
+    total: applications.length,
+    applied: applications.filter((a) => a.status === "APPLIED").length,
+    interviews: applications.filter((a) => a.status === "INTERVIEW").length,
+    offers: applications.filter((a) => a.status === "OFFER").length,
+  };
 
   return (
-    <main className="app">
-      <header className="app-header">
-        <p className="eyebrow">YOUR PLACEMENT JOURNEY</p>
-        <h1>Placement Preparation Tracker</h1>
-        <p>Build skills. Track progress. Get placement-ready.</p>
+    <main className="app-shell">
+      <header className="hero">
+        <p className="eyebrow">PLACEMENT PREPARATION SYSTEM</p>
+        <h1>Company Application Tracker</h1>
+        <p>Track every application, assessment, interview and offer.</p>
       </header>
 
-      <section className="dashboard">
-        <div className="stat-card">
-          <span>Total Tasks</span>
-          <strong>{tasks.length}</strong>
-        </div>
-
-        <div className="stat-card">
-          <span>Completed</span>
-          <strong>{completedCount}</strong>
-        </div>
-
-        <div className="stat-card">
-          <span>Pending</span>
-          <strong>{pendingCount}</strong>
-        </div>
+      <section className="stats">
+        <article className="stat-card">
+          <span>Total applications</span>
+          <strong>{counts.total}</strong>
+        </article>
+        <article className="stat-card">
+          <span>Applied</span>
+          <strong>{counts.applied}</strong>
+        </article>
+        <article className="stat-card">
+          <span>Interviews</span>
+          <strong>{counts.interviews}</strong>
+        </article>
+        <article className="stat-card">
+          <span>Offers</span>
+          <strong>{counts.offers}</strong>
+        </article>
       </section>
 
-      <section className="tasks-section">
-        <h2>Add a Preparation Task</h2>
+      <section className="panel">
+        <h2>{editingId ? "Edit application" : "Add company application"}</h2>
 
-        <form className="task-form" onSubmit={addTask}>
-          <input
-            type="text"
-            placeholder="Enter a task, e.g. Arrays in Java"
-            value={title}
-            onChange={(event) => setTitle(event.target.value)}
-          />
+        <form className="application-form" onSubmit={handleSubmit}>
+          <label>
+            Company name *
+            <input
+              name="companyName"
+              value={form.companyName}
+              onChange={handleChange}
+              placeholder="e.g. TCS"
+              required
+              maxLength={150}
+            />
+          </label>
 
-          <select
-            value={category}
-            onChange={(event) => setCategory(event.target.value)}
-          >
-            <option>Java</option>
-            <option>DSA</option>
-            <option>Aptitude</option>
-            <option>Frontend</option>
-            <option>Backend</option>
-            <option>DBMS</option>
-            <option>Operating Systems</option>
-            <option>Computer Networks</option>
-            <option>Communication</option>
-          </select>
+          <label>
+            Job role *
+            <input
+              name="jobRole"
+              value={form.jobRole}
+              onChange={handleChange}
+              placeholder="e.g. Java Developer"
+              required
+              maxLength={150}
+            />
+          </label>
 
-          <button type="submit">+ Add Task</button>
+          <label>
+            Application date
+            <input
+              type="date"
+              name="applicationDate"
+              value={form.applicationDate}
+              onChange={handleChange}
+            />
+          </label>
+
+          <label>
+            Application status
+            <select name="status" value={form.status} onChange={handleChange}>
+              {statuses.map((status) => (
+                <option key={status} value={status}>
+                  {status}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="full-width">
+            Job link
+            <input
+              type="url"
+              name="jobLink"
+              value={form.jobLink}
+              onChange={handleChange}
+              placeholder="https://company.com/careers"
+            />
+          </label>
+
+          <label className="full-width">
+            Notes
+            <textarea
+              name="notes"
+              value={form.notes}
+              onChange={handleChange}
+              placeholder="Recruiter details, preparation notes, next steps..."
+              rows="3"
+            />
+          </label>
+
+          <div className="form-actions full-width">
+            <button type="submit">
+              {editingId ? "Save changes" : "Add application"}
+            </button>
+            {editingId && (
+              <button
+                type="button"
+                className="secondary"
+                onClick={() => {
+                  setEditingId(null);
+                  setForm(emptyForm);
+                }}
+              >
+                Cancel
+              </button>
+            )}
+          </div>
         </form>
 
-        {error && <p className="error">{error}</p>}
+        {message && <p className="message" role="status">{message}</p>}
+      </section>
 
-        <h2>Your Preparation Tasks</h2>
+      <section className="panel">
+        <div className="section-heading">
+          <h2>Your applications</h2>
+          <button className="secondary" onClick={loadApplications}>
+            Refresh
+          </button>
+        </div>
 
         {loading ? (
-          <p>Loading tasks...</p>
-        ) : tasks.length === 0 ? (
-          <p>No tasks yet. Add your first preparation task above!</p>
+          <p>Loading applications...</p>
+        ) : applications.length === 0 ? (
+          <p>No applications yet. Add your first company above.</p>
         ) : (
-          tasks.map((task) => (
-            <article className="task-card" key={task.id}>
-              <div className="task-info">
-                <h3>{task.title}</h3>
-                <p>{task.category}</p>
-              </div>
-
-              <div className="task-actions">
-                <button
-                  className={task.completed ? "completed" : "pending"}
-                  onClick={() => toggleTask(task)}
-                >
-                  {task.completed ? "Completed" : "Mark Complete"}
-                </button>
-
-                <button
-                  className="delete-button"
-                  onClick={() => deleteTask(task.id)}
-                >
-                  Delete
-                </button>
-              </div>
-            </article>
-          ))
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Company / Role</th>
+                  <th>Applied date</th>
+                  <th>Status</th>
+                  <th>Notes</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {applications.map((application) => (
+                  <tr key={application.id}>
+                    <td>
+                      <strong>{application.companyName}</strong>
+                      <small>{application.jobRole}</small>
+                      {application.jobLink && (
+                        <a
+                          href={application.jobLink}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          Job link
+                        </a>
+                      )}
+                    </td>
+                    <td>{application.applicationDate || "—"}</td>
+                    <td>
+                      <select
+                        aria-label={`Status for ${application.companyName}`}
+                        value={application.status}
+                        onChange={async (event) => {
+                          try {
+                            const response = await fetch(
+                              `${API_URL}/${application.id}`,
+                              {
+                                method: "PUT",
+                                headers: {
+                                  "Content-Type": "application/json",
+                                },
+                                body: JSON.stringify({
+                                  ...application,
+                                  status: event.target.value,
+                                }),
+                              }
+                            );
+                            if (!response.ok) throw new Error("Update failed");
+                            setMessage("Status updated!");
+                            await loadApplications();
+                          } catch (error) {
+                            setMessage(error.message);
+                          }
+                        }}
+                      >
+                        {statuses.map((status) => (
+                          <option key={status} value={status}>
+                            {status}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
+                    <td>{application.notes || "—"}</td>
+                    <td className="actions">
+                      <button onClick={() => startEdit(application)}>
+                        Edit
+                      </button>
+                      <button
+                        className="danger"
+                        onClick={() => deleteApplication(application.id)}
+                      >
+                        Delete
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </section>
     </main>

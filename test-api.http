@@ -11,3 +11,19 @@ Content-Type: application/json
   "completed": false
 }
 
+
+### Get all company applications
+GET http://localhost:8080/api/applications
+
+### Add a company application
+POST http://localhost:8080/api/applications
+Content-Type: application/json
+
+{
+  "companyName": "TCS",
+  "jobRole": "Java Developer",
+  "applicationDate": "2026-10-23",
+  "status": "APPLIED",
+  "jobLink": "https://www.tcs.com/careers",
+  "notes": "Practice Java and DSA"
+}
